@@ -20,7 +20,7 @@ var server = http.createServer(function(req, res) {
       };
   
   function validContentType(type) {
-    var re = new RegExp('^(' + invalidContentTypes.join('|') + ')$');
+    var re = new RegExp('(' + invalidContentTypes.join('|') + ')');
     return ! re.test(type);
   }
   
