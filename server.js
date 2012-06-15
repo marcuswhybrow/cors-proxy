@@ -11,7 +11,18 @@ var http = require('http'),
     ];
 
 var server = http.createServer(function(req, res) {
-  var proxyUrl = url.parse('http://' + req.url.slice(1)),
+  
+  var path = req.url.slice(1);
+  
+  console.log(path);
+  
+  if (path.indexOf('http://') != 0) {
+    res.statusCode = 404
+    res.end();
+    return
+  }
+  
+  var proxyUrl = url.parse(path),
       options = {
         host: proxyUrl.hostname,
         port: proxyUrl.port || 80,
