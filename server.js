@@ -14,8 +14,6 @@ var server = http.createServer(function(req, res) {
   
   var path = req.url.slice(1);
   
-  console.log(path);
-  
   if (path.indexOf('http://') != 0) {
     res.statusCode = 404
     res.end();
