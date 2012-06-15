@@ -46,6 +46,8 @@ var server = http.createServer(function(req, res) {
     } else {
       if (validContentType(proxyRes.headers['content-type'])) {
         var headers = proxyRes.headers;
+        if (req.headers['x-corsproxy-override-mime-type'])
+          headers['content-type'] = req.headers['x-corsproxy-override-mime-type']
         for (name in corsHeaders)
           headers[name] = corsHeaders[name];
         res.writeHead(proxyRes.statusCode, headers);
