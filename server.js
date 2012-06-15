@@ -1,40 +1,65 @@
 var http = require('http'),
-    cors_headers = {
+    url = require('url'),
+    corsHeaders = {
       'Access-Control-Allow-Origin'  : '*',
       'Access-Control-Allow-Methods' : 'POST, GET, PUT, DELETE',
       'Access-Control-Max-Age'       : '86400', // 24 hours
       'Access-Control-Allow-Headers' : 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept'
-    };
+    },
+    invalidContentTypes = [
+      'text/html'
+    ];
 
-var server = http.createServer(function(request, response) {
-  var pathArray = request.url.slice(1).split('/'),
+var server = http.createServer(function(req, res) {
+  var proxyUrl = url.parse('http://' + req.url.slice(1)),
       options = {
-        host: pathArray[0],
-        port: 80,
-        path: '/' + pathArray.slice(1).join('/'),
-        method: request.method
+        host: proxyUrl.hostname,
+        port: proxyUrl.port || 80,
+        path: proxyUrl.path,
+        method: 'GET'
+      };
+  
+  function validContentType(type) {
+    var re = new RegExp('^(' + invalidContentTypes.join('|') + ')$');
+    return ! re.test(type);
+  }
+  
+  function handleRes(proxyRes) {
+    if ([301, 302, 307, 308].indexOf(proxyRes.statusCode) >= 0 && proxyRes.headers['location']) {
+      var location = url.parse(proxyRes.headers['location']),
+          options = {
+            host: location.host,
+            post: location.port || 80,
+            path: location.path,
+            method: 'GET'
+          };
+        http.request(options, handleRes).end();
+    } else {
+      if (validContentType(proxyRes.headers['content-type'])) {
+        var headers = proxyRes.headers;
+        for (name in corsHeaders)
+          headers[name] = corsHeaders[name];
+        res.writeHead(proxyRes.statusCode, headers);
+
+        proxyRes.on('data', function(chunk) {
+          res.write(chunk, 'binary');
+        });
+        proxyRes.on('end', function() {
+          res.end();
+        });
+      } else {
+        res.statusCode = 415 // Unsupported Media Type
+        res.end();
       }
+    }
+  }
   
   console.log(options.host, options.method, options.path);
   
-  var proxy = http.request(options, function(proxy_response) {
-    var headers = proxy_response.headers;
-    for (name in cors_headers) {
-      headers[name] = cors_headers[name];
-    }
-    response.writeHead(proxy_response.statusCode, headers);
-    
-    proxy_response.on('data', function(chunk) {
-      response.write(chunk, 'binary');
-    });
-    proxy_response.on('end', function() {
-      response.end();
-    });
-  });
-  
-  proxy.on('error', function(e) {
-    console.log('problem with request: ', + e.message);
-    response.end();
+  var proxy = http.request(options, handleRes);
+  proxy.on('error', function() {
+    console.log('error: ' + options);
+    res.end();
   });
   
   proxy.end();
