@@ -12,6 +12,12 @@ var http = require('http'),
 
 var server = http.createServer(function(req, res) {
   
+  if (req.method == 'OPTIONS') {
+    res.writeHead(200, corsHeaders);
+    res.end();
+    return
+  }
+  
   function getDocument(path, raw) {
     var proxyUrl = url.parse(path),
         options = {
