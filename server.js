@@ -10,6 +10,8 @@ var http = require('http'),
       'text/html'
     ];
 
+require('bufferjs/concat');
+
 var server = http.createServer(function(req, res) {
   
   if (req.method == 'OPTIONS') {
@@ -18,7 +20,7 @@ var server = http.createServer(function(req, res) {
     return
   }
   
-  function getDocument(path, raw) {
+  function getDocument(path, type) {
     var proxyUrl = url.parse(path),
         options = {
           host: proxyUrl.hostname,
@@ -45,18 +47,35 @@ var server = http.createServer(function(req, res) {
       } else {
         if (validContentType(proxyRes.headers['content-type'])) {
           var headers = proxyRes.headers;
-          if (raw)
+          if (type == 'raw')
             headers['content-type'] = 'text/plain; charset=x-user-defined';
+          if (type == 'base64') {
+            headers['content-type'] = 'text/plain; charset=x-user-defined';
+            // headers['content-transfer-encoding'] = 'base64';
+          }
           for (name in corsHeaders)
             headers[name] = corsHeaders[name];
-          res.writeHead(proxyRes.statusCode, headers);
 
-          proxyRes.on('data', function(chunk) {
-            res.write(chunk, 'binary');
-          });
-          proxyRes.on('end', function() {
-            res.end();
-          });
+          if (type == 'base64') {
+            var buffers = [];
+            proxyRes.on('data', function(chunk) {
+              buffers.push(chunk);
+            })
+            proxyRes.on('end', function() {
+              var result = new Buffer.concat(buffers).toString('base64')
+              headers['content-length'] = result.length;
+              res.writeHead(proxyRes.statusCode, headers);
+              res.write(result, 'binary');
+              res.end();
+            });
+          } else {
+            proxyRes.on('data', function(chunk) {
+              res.write(chunk, 'binary');
+            });
+            proxyRes.on('end', function() {
+              res.end();
+            });
+          }
         } else {
           res.statusCode = 415 // Unsupported Media Type
           res.end();
@@ -64,7 +83,7 @@ var server = http.createServer(function(req, res) {
       }
     }
 
-    console.log(options.host, options.method, options.path);
+    console.log(type, options.host, options.method, options.path);
 
     var proxy = http.request(options, handleRes);
     proxy.on('error', function() {
@@ -75,13 +94,12 @@ var server = http.createServer(function(req, res) {
     proxy.end();
   }
   
-  console.log(req.url);
-  
   if (req.url.indexOf('/http://') == 0) {
     getDocument(req.url.slice(1));
   } else if (req.url.indexOf('/raw/http://') == 0) {
-    console.log(req.url.slice(5));
-    getDocument(req.url.slice(5), true);
+    getDocument(req.url.slice(5), 'raw');
+  } else if (req.url.indexOf('/base64/http://') == 0) {
+    getDocument(req.url.slice(8), 'base64');
   } else {
     res.statusCode = 404
     res.end();
